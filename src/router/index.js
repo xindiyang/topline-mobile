@@ -8,12 +8,34 @@ export default new Router({
     {
       path: '/',
       name: 'home',
-      component: () => import('../views/Home/index.vue')
+      component: () => import('@/views/tabbar-layout'),
+      children: [
+        {
+          path: '',
+          name: 'home',
+          component: () => import('@/views/Home')
+        },
+        {
+          path: '/qustion',
+          name: 'question',
+          component: () => import('@/views/Question')
+        },
+        {
+          path: '/videos',
+          name: 'videos',
+          component: () => import('@/views/Videos')
+        },
+        {
+          path: '/my',
+          name: 'my',
+          component: () => import('@/views/My')
+        }
+      ]
     },
     {
       path: '/login',
       name: 'login',
-      component: () => import('../views/Login/index.vue')
+      component: () => import('@/views/Login')
     }
   ]
 })
