@@ -1,23 +1,30 @@
 <template>
   <div>
-    <div class="home">
+    <!-- 头部 -->
       <van-nav-bar
        title="首页"
-       :fixed = fix
+       fixed
        :border = false
-       style="wideth = 92px"
+       style="width = 92px"
        :z-index= 'index'>
       </van-nav-bar>
-    </div>
-    <div class="tab">
+    <!-- 头部 -->
+    <!-- 频道标签 -->
       <van-tabs
+        class="channel-tabs"
         v-model="activeIndex"
         border color=skyblue
         line-width='20px'>
+        <!-- 频道显示控制按钮 -->
+        <div slot="nav-right" class="wap-nav" @click="isChannelShow = true">
+          <van-icon name= 'wap-nav'/>
+        </div>
+        <!-- 频道显示控制按钮 -->
         <van-tab
           v-for="item in channels"
           :key="item.id"
           :title="item.name">
+          <!-- 下拉刷新组件 -->
             <van-pull-refresh
               v-model="item.downPullLoading"
               :success-text='item.downPullSuccessText'
@@ -33,28 +40,37 @@
                       :key="items.art_id"
                       :title="items.title"/>
                 </van-list>
-            </van-pull-refresh>
+             </van-pull-refresh>
+             <!-- 下拉刷新组件 -->
         </van-tab>
       </van-tabs>
-    </div>
+    <!-- 频道标签 -->
+   <home-channel
+     v-model="isChannelShow"
+     :user-channels='channels'
+     :active-index='activeIndex'/>
   </div>
 </template>
 
 <script>
 import { channels } from '@/api/channels'
 import { getArticles } from '@/api/article'
+import HomeChannel from './component/channel'
 export default {
   name: 'Home',
+  components: {
+    HomeChannel
+  },
   data () {
     return {
       activeIndex: 0,
       list: [],
-      reload: '',
-      fix: true,
       index: 999,
       isLoading: false,
       loading: false,
       finished: false,
+      // 控制频道面板的显示状态
+      isChannelShow: false,
       // 存储频道
       channels: []
     }
@@ -68,6 +84,7 @@ export default {
   watch: {
     async '$store.state.user' () {
       // 重新加载用户频道列表
+      // 凡是能this. 点出来的东西都可以被监视
       this.loadeChannels()
       // 频道数据改变，重新加载当前激活频道的数据
       // 只需将上拉加载设置为true，它就会自动加载用户频道列表
@@ -182,11 +199,22 @@ export default {
 </script>
 
 <style scoped>
+.channel-tabs {
+  margin-top: 128px;
+}
+.channel-tabs /deep/ .van-tabs_warp {
+  position: fixed;
+  top: 128px;
+}
 .van-nav-bar {
   height: 128px;
   background-color: #3296fa;
 }
-.tab{
-  margin-top: 128px;
+.channel-tabs .wap-nav {
+  position: sticky;
+  right: 0;
+  display: flex;
+  align-items: center;
+  background: #fff;
 }
 </style>
