@@ -1,22 +1,30 @@
 <template>
   <div>
     <!-- 头部 -->
-      <van-nav-bar
+      <!-- <van-nav-bar
        title="首页"
        fixed
        :border = false
        style="width = 92px"
        :z-index= 'index'>
-      </van-nav-bar>
+      </van-nav-bar> -->
+      <van-search
+        fixed
+        class="search"
+        placeholder = "请输入搜索关键词"
+        shape="round"/>
     <!-- 头部 -->
     <!-- 频道标签 -->
       <van-tabs
         class="channel-tabs"
         v-model="activeIndex"
-        border color=skyblue
+        border
+        color=skyblue
         line-width='20px'>
         <!-- 频道显示控制按钮 -->
-        <div slot="nav-right" class="wap-nav" @click="isChannelShow = true">
+        <div slot="nav-right"
+          class="wap-nav"
+          @click="isChannelShow = true">
           <van-icon name= 'wap-nav'/>
         </div>
         <!-- 频道显示控制按钮 -->
@@ -26,19 +34,52 @@
           :title="item.name">
           <!-- 下拉刷新组件 -->
             <van-pull-refresh
-              v-model="item.downPullLoading"
+              v-model="item.upLoading"
               :success-text='item.downPullSuccessText'
               :success-duration= '1000'
               @refresh="onRefresh">
                 <van-list
-                  v-model="item.upPullLoading"
-                  :finished='item.upPullFinished'
+                  v-model="item.pullRefreshLoading"
+                  :finished='item.finished'
                   finished-text='没有更多了'
                   @load='onLoade'>
                     <van-cell
                       v-for="items in item.articles"
                       :key="items.art_id"
-                      :title="items.title"/>
+                      :title="items.title">
+                      <div slot="label">
+                          <template v-if="items.cover.type">
+                  <van-grid :border="false" :column-num="3">
+                    <van-grid-item v-for="(img, index) in items.cover.images" :key="index">
+                      <van-image :src="img" lazy-load />
+                    </van-grid-item>
+                  </van-grid>
+                </template>
+                <p>
+                  <span>{{ items.aut_name }}</span>
+                  &nbsp;
+                  <span>{{ items.comm_count }}评论</span>
+                  &nbsp;
+                  <!-- <span>{{ relativeTime(item.pubdate) }}</span> -->
+                  <!--
+                    | relativeTime 就是在调用过滤器函数
+                    过滤器函数接收的参数就是 | 前面的 item.pubdate
+                    过滤器函数返回值会输出到这里
+                  -->
+
+                  <!--
+                    过滤器说白了就是函数，在模板中调用函数的另一种方式
+                    一般用于格式化输出内容，其中不会有太多业务逻辑，一般都是对字符串的格式化处理
+                    过滤器可以定义到：
+                      全局：Vue.filter('过滤器名称')，可以在任何组件中使用
+                      局部：filters 选项，只能在组件内部使用
+                  -->
+                  <span>{{ items.pubdate | relativeTime }}</span>
+                  <!-- 这里更多操作的点击按钮 -->
+                  <van-icon class="close" name="close" @click="handleShowMoreAction(item)" />
+                </p>
+                      </div>
+                      </van-cell>
                 </van-list>
              </van-pull-refresh>
              <!-- 下拉刷新组件 -->
@@ -47,8 +88,8 @@
     <!-- 频道标签 -->
    <home-channel
      v-model="isChannelShow"
-     :user-channels='channels'
-     :active-index='activeIndex'/>
+     :user-channels.sync='channels'
+     :active-index.sync='activeIndex'/>
   </div>
 </template>
 
@@ -71,6 +112,7 @@ export default {
       finished: false,
       // 控制频道面板的显示状态
       isChannelShow: false,
+      pullRefreshLoading: false,
       // 存储频道
       channels: []
     }
@@ -85,10 +127,11 @@ export default {
     async '$store.state.user' () {
       // 重新加载用户频道列表
       // 凡是能this. 点出来的东西都可以被监视
-      this.loadeChannels()
+      await this.loadeChannels()
       // 频道数据改变，重新加载当前激活频道的数据
       // 只需将上拉加载设置为true，它就会自动加载用户频道列表
-      this.activeChannel.upPullLoading = true
+      this.activeChannel.upLoading = true
+      this.onLoade()
     }
   },
   created () {
@@ -122,12 +165,13 @@ export default {
       channel.forEach(element => {
         element.articles = []
         element.timestamp = Date.now()
-        element.upPullFinished = false
-        element.downPullLoading = false
-        element.downPullLoading = false
+        element.finished = false // 控制该频道上拉加载是否已加载完毕
+        element.upLoading = false // 控制该频道的下拉刷新 loading
+        element.pullRefreshLoading = false // 控制频道列表的上拉刷新状态
       })
       this.channels = channel
     },
+
     /**
      * 上拉加载更多，应该往频道的 articles 中最后push数据
      * onLoad 进入页面就会调用，当数据不够一个页面时，它会多次调用
@@ -136,52 +180,54 @@ export default {
     async onLoade () {
       await this.$sleep(1000)
       // 异步更新数据，加载文章列表并赋给常量articles
-      // 定义一个新的数组，用来存放新的数据
       let data = []
       // 重新加载，并将值赋给data
       data = await this.loadArticles()
-      console.log(data)
       // 当上一个时间戳不存在并且数据为空时
       if (!data.pre_timestamp && !data.results.length) {
-        this.activeChannel.upPullFinished = true
-        this.activeChannel.upPullLoading = false
+        // 设置该频道数据已经加载完毕，组件会自动给出提示，并不在onLoade
+        this.activeChannel.finished = true
+        // 取消加载
+        this.activeChannel.pullRefreshLoading = false
         return
       }
       // 当上一个时间戳存在是，且数据为空，就加载列表文章
       if (data.pre_timestamp && !data.results.length) {
         this.activeChannel.timestamp = data.pre_timestamp
+        // 加载下一页数据
         data = await this.loadArticles()
-        console.log(data)
       }
+      // 数据加载好以后，将上次的时间戳更新到当前的时间戳，用于加载上一次推荐数据
       this.activeChannel.timestamp = data.pre_timestamp
+      // 将文章数据更新到新的频道中，追加不是覆盖
       this.activeChannel.articles.push(...data.results)
-      this.activeChannel.upPullLoading = false
+      // 数据加载完毕取消上拉
+      this.activeChannel.pullRefreshLoading = false
     },
+
+    // 下拉刷新
     async onRefresh () {
-      const { activeChannel } = this
-      // 备份加载下一页数据的时间戳
-      const timestamp = activeChannel.timestamp
-      // 使用最新时间戳去请求最新的推荐数据
-      activeChannel.timestamp = Date.now()
-      const data = await this.loadArticles()
-      // 如果有最新数据，将数据更新到频道的文章列表中
+      // 获取最新数据
+      const data = await getArticles({
+        channelId: this.activeChannel.id,
+        timestamp: Date.now(),
+        withTop: 1
+      })
+      // 如果有最新数据
       if (data.results.length) {
-        // 将当前最新的推荐内容重置到频道文章中
-        activeChannel.articles = data.results
-        // 由于你重置了文章列表，那么当前数据中的 pre_timestamp 就是上拉加载更多的下一页数据的时间戳
-        activeChannel.timestamp = data.pre_timestamp
-        activeChannel.downPullSuccessText = '更新成功'
-        // 当下拉刷新有数据并重置以后数据无法满足一屏，所以我们使用 onLoad 再多加载一页数据
+        // 将最新数据重置到当前频道
+        console.log(data.results)
+        this.activeChannel.articles = data.results
+        this.activeChannel.timestamp = data.pre_timestamp
+        this.activeChannel.pullSuccessText = '更新完成'
+        // 因为最新数据无法撑满一页，所以使用加载更多再请求一次
         this.onLoad()
-      } else {
-        // 如果没有最新数据，提示已是最新内容
-        activeChannel.downPullSuccessText = '已是最新数据'
       }
-      // 下拉刷新结束，取消 loading 状态
-      activeChannel.downPullLoading = false
-      // 没有最新数据，将原来的用于请求下一页的时间戳恢复过来
-      activeChannel.timestamp = timestamp
+      this.activeChannel.pullSuccessText = '暂无数据更新'
+      // 无论如何，最后都关闭加载状态
+      this.activeChannel.pullRefreshLoading = false
     },
+
     // 加载文章列表
     async loadArticles () {
       // es6对象结构，把频道的信息返回
@@ -191,7 +237,6 @@ export default {
         timestamp,
         withTop: 1
       })
-      console.log(data)
       return data
     }
   }
@@ -200,16 +245,14 @@ export default {
 
 <style scoped>
 .channel-tabs {
-  margin-top: 128px;
+  margin-bottom: 128px;
 }
+
 .channel-tabs /deep/ .van-tabs_warp {
   position: fixed;
   top: 128px;
 }
-.van-nav-bar {
-  height: 128px;
-  background-color: #3296fa;
-}
+
 .channel-tabs .wap-nav {
   position: sticky;
   right: 0;
