@@ -47,7 +47,8 @@
                     <van-cell
                       v-for="items in item.articles"
                       :key="items.art_id.toString()"
-                      :title="items.title">
+                      :title="items.title"
+                      @click="$router.push({ name: 'article', params: {articleId: items.art_id }})">
                       <div slot="label">
                           <template v-if="items.cover.type">
                   <van-grid :border="false" :column-num="3">
@@ -77,7 +78,7 @@
                   -->
                   <span>{{ items.pubdate | relativeTime }}</span>
                   <!-- 这里更多操作的点击按钮 -->
-                  <van-icon class="close" name="close" @click="handleShowMoreAction(items)" />
+                  <van-icon class="close" name="close" @click.stop="handleShowMoreAction(items)" />
                 </p>
                       </div>
                       </van-cell>
