@@ -1,4 +1,6 @@
 import axios from 'axios'
+import JSONbig from 'json-bigint'
+import store from '@/store'
 
 /**
  * axios.create 用于创建一个 axios 实例，该实例和 axios 的功能是一模一样的
@@ -17,6 +19,10 @@ const request = axios.create({
 // Add a request interceptor
 request.interceptors.request.use(function (config) {
   // Do something before request is sent
+  const { user } = store.state
+  if (user) {
+    config.headers.Authorization = `Bearer ${user.token}`
+  }
   return config
 }, function (error) {
   // Do something with request error
@@ -35,4 +41,16 @@ request.interceptors.response.use(function (response) {
   return Promise.reject(error)
 })
 
+/**
+ * 处理后端返回数据中数字超出 JavaScript 安全整数范围
+ */
+request.defaults.transformResponse = [function (data) {
+  try {
+    // 如果是 json 格式字符串，那就转换并返回给后续使用
+    return JSONbig.parse(data)
+  } catch (err) {
+    // 报错就意味着 data 不是 json 格式字符串，这里就直接原样返回给后续使用
+    return data
+  }
+}]
 export default request

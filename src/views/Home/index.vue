@@ -12,7 +12,8 @@
         fixed
         class="search"
         placeholder = "请输入搜索关键词"
-        shape="round"/>
+        shape="round"
+        @click="handleSearch"/>
     <!-- 头部 -->
     <!-- 频道标签 -->
       <van-tabs
@@ -45,7 +46,7 @@
                   @load='onLoade'>
                     <van-cell
                       v-for="items in item.articles"
-                      :key="items.art_id"
+                      :key="items.art_id.toString()"
                       :title="items.title">
                       <div slot="label">
                           <template v-if="items.cover.type">
@@ -76,7 +77,7 @@
                   -->
                   <span>{{ items.pubdate | relativeTime }}</span>
                   <!-- 这里更多操作的点击按钮 -->
-                  <van-icon class="close" name="close" @click="handleShowMoreAction(item)" />
+                  <van-icon class="close" name="close" @click="handleShowMoreAction(items)" />
                 </p>
                       </div>
                       </van-cell>
@@ -86,16 +87,43 @@
         </van-tab>
       </van-tabs>
     <!-- 频道标签 -->
-   <home-channel
-     v-model="isChannelShow"
-     :user-channels.sync='channels'
-     :active-index.sync='activeIndex'/>
+    <!-- 弹窗标签 -->
+    <home-channel
+      v-model="isChannelShow"
+      :user-channels.sync='channels'
+      :active-index.sync='activeIndex'/>
+    <!-- 弹窗标签 -->
+
+    <!-- 更多操作弹框 -->
+    <van-dialog
+      v-model="isMoreActionShow"
+      :showConfirmButton="false"
+      closeOnClickOverlay
+      :before-close="handleMoreActionClose"
+    >
+      <van-cell-group v-if="!toggleRubbish">
+        <van-cell title="不感兴趣" @click="handleDislick" />
+        <van-cell title="反馈垃圾内容" is-link @click="toggleRubbish = true" />
+        <van-cell title="拉黑作者" @click="handleAddBlacklist" />
+      </van-cell-group>
+      <van-cell-group v-else>
+        <van-cell icon="arrow-left" @click="toggleRubbish = false" />
+        <van-cell
+          v-for="item in repotTypes"
+          :key="item.value"
+          :title="item.label"
+          @click="handleReportArticle(item.value)"
+        />
+      </van-cell-group>
+    </van-dialog>
+    <!-- 更多操作弹框 -->
   </div>
 </template>
 
 <script>
 import { channels } from '@/api/channels'
-import { getArticles } from '@/api/article'
+import { getArticles, dislikeArticle, reportArticle } from '@/api/article'
+import { addBlacklist } from '@/api/user'
 import HomeChannel from './component/channel'
 export default {
   name: 'Home',
@@ -114,7 +142,21 @@ export default {
       isChannelShow: false,
       pullRefreshLoading: false,
       // 存储频道
-      channels: []
+      channels: [],
+      isMoreActionShow: false,
+      toggleRubbish: false,
+      repotTypes: [
+        { label: '标题夸张', value: '1' },
+        { label: '低俗色情', value: '2' },
+        { label: '错别字多', value: '3' },
+        { label: '旧闻重复', value: '4' },
+        { label: '广告软文', value: '5' },
+        { label: '内容不实', value: '6' },
+        { label: '涉嫌违法犯罪', value: '7' },
+        { label: '侵权', value: '8' },
+        { label: '其他问题', value: '0' }
+      ],
+      currentArticle: null
     }
   },
   computed: {
@@ -238,6 +280,73 @@ export default {
         withTop: 1
       })
       return data
+    },
+    /**
+     * 处理显示更多操作弹框面板
+     */
+    handleShowMoreAction (item) {
+      console.log(item)
+      // 将点击操作更多的文章存储起来，用于后续使用
+      this.currentArticle = item
+      // 显示弹框
+      this.isMoreActionShow = true
+    },
+    async handleDislick () {
+      // 拿到操作的文章 id
+      console.log(this.currentArticle.art_id.toString())
+      const articleId = this.currentArticle.art_id.toString()
+      // 请求操作
+      await dislikeArticle(articleId)
+      // 隐藏对话框
+      this.isMoreActionShow = false
+      // 当前频道文章列表
+      const articles = this.activeChannel.articles
+      // 找到不喜欢的文章位于文章中的索引
+      // findIndex 是一个数组方法，它会遍历数组，找到满足 item.id === articleId 条件的数据 id
+      const delIndex = articles.findIndex(item => item.art_id.toString() === articleId)
+      // 把本条数据移除
+      articles.splice(delIndex, 1)
+      this.$toast('操作成功')
+    },
+    async handleAddBlacklist () {
+      await addBlacklist(this.currentArticle.aut_id)
+      this.isMoreActionShow = false
+      this.$toast('操作成功')
+    },
+    async handleReportArticle (type) {
+      try {
+        await reportArticle({
+          articleId: this.currentArticle.art_id.toString(),
+          type,
+          remark: ''
+        })
+        this.isMoreActionShow = false
+        this.$toast('举报成功')
+      } catch (err) {
+        console.log(err)
+        if (err.response.status === 409) {
+          this.$toast('该文章已被举报')
+        }
+      }
+    },
+    /**
+     * 该函数会在关闭对话框的时候被调用
+     * 我们可以在这里加入一些关闭之前的逻辑
+     * 如果设置了次函数，那么最后必须手动的 done 才会关闭对话框
+     */
+    handleMoreActionClose (action, done) {
+      // 瞬间关闭
+      done()
+      // 然后将里面的面板切换为初始状态
+      window.setTimeout(() => {
+        this.toggleRubbish = false
+      }, 500)
+    },
+    /* 跳转到搜索页面 */
+    handleSearch () {
+      this.$router.push({
+        name: 'search'
+      })
     }
   }
 }
